@@ -1,118 +1,163 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  StyleSheet, Modal, Alert, ActivityIndicator,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+import { BASE_URL } from '../../constants/API';
+
+const FREQUENCY_OPTIONS = ['Once daily', 'Twice daily', 'Every 8 hours', 'Every 6 hours', 'Custom'];
+
+function hoursFromFrequency(frequency, customHours) {
+  switch (frequency) {
+    case 'Once daily': return 24;
+    case 'Twice daily': return 12;
+    case 'Every 8 hours': return 8;
+    case 'Every 6 hours': return 6;
+    case 'Custom': return parseInt(customHours) || 24;
+    default: return 24;
+  }
+}
 
 export default function MedicationPage() {
-  const [medications, setMedications] = useState([
-    {
-      id: '1',
-      name: 'White tablet',
-      dosage: '5mg',
-      frequency: 'Once daily',
-      hours: 24,
-      duration: 'For a week',
-      lastTaken: null,
-      nextDue: null,
-    },
-  ]);
-
+  const [medications, setMedications] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDosage, setNewDosage] = useState('');
   const [selectedFrequency, setSelectedFrequency] = useState('Once daily');
   const [customHours, setCustomHours] = useState('');
-  const [newDuration, setNewDuration] = useState('');
 
-  const getHoursFromFrequency = (frequency) => {
-    switch (frequency) {
-      case 'Once daily': return 24;
-      case 'Twice daily': return 12;
-      case 'Every 8 hours': return 8;
-      case 'Every 6 hours': return 6;
-      case 'Custom': return parseInt(customHours) || 24;
-      default: return 24;
+  const fetchMedications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/medication`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      setMedications(data);
+    } catch {
+      Alert.alert('Error', 'Failed to load medications.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMedications();
+    }, [fetchMedications])
+  );
+
+  const addMedication = async () => {
+    if (!newName.trim() || !newDosage.trim()) {
+      Alert.alert('Required', 'Name and dosage are required.');
+      return;
+    }
+    const hours = hoursFromFrequency(selectedFrequency, customHours);
+    const nextDoseDue = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE_URL}/medication`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim(),
+          dosage: newDosage.trim(),
+          givenAt: new Date().toISOString(),
+          nextDoseDue,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      setNewName('');
+      setNewDosage('');
+      setSelectedFrequency('Once daily');
+      setCustomHours('');
+      setModalVisible(false);
+      await fetchMedications();
+    } catch {
+      Alert.alert('Error', 'Failed to save medication.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const calculateNextDue = (hours) => {
-    const next = new Date();
-    next.setHours(next.getHours() + hours);
-    return next.toLocaleString();
-  };
-
-  const addMedication = () => {
-    if (!newName || !newDosage || !selectedFrequency || !newDuration) return;
-    const hours = getHoursFromFrequency(selectedFrequency);
-    const newMed = {
-      id: Date.now().toString(),
-      name: newName,
-      dosage: newDosage,
-      frequency: selectedFrequency,
-      hours: hours,
-      duration: newDuration,
-      lastTaken: null,
-      nextDue: null,
-    };
-    setMedications([...medications, newMed]);
-    setNewName('');
-    setNewDosage('');
-    setSelectedFrequency('Once daily');
-    setCustomHours('');
-    setNewDuration('');
-    setModalVisible(false);
-  };
-
-  const markAsTaken = (id) => {
-    const now = new Date();
-    setMedications((prev) =>
-      prev.map((med) =>
-        med.id === id
-          ? {
-              ...med,
-              lastTaken: now.toLocaleString(),
-              nextDue: calculateNextDue(med.hours),
+  const deleteMedication = (id) => {
+    Alert.alert(
+      'Delete Medication',
+      'Remove this medication record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${BASE_URL}/medication/${id}`, { method: 'DELETE' });
+              setMedications(prev => prev.filter(m => m.id !== id));
+            } catch {
+              Alert.alert('Error', 'Failed to delete medication.');
             }
-          : med
-      )
+          },
+        },
+      ]
     );
   };
 
-  const renderMedication = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardContent}>
-        <MaterialCommunityIcons name="pill" size={24} color="#0984e3" style={styles.icon} />
-        <View style={styles.textContainer}>
-          <Text style={styles.medName}>{item.name}</Text>
-          <Text style={styles.details}>Dosage: {item.dosage}</Text>
-          <Text style={styles.details}>Frequency: {item.frequency}</Text>
-          <Text style={styles.details}>Duration: {item.duration}</Text>
-          {item.lastTaken && <Text style={styles.details}>Last Taken: {item.lastTaken}</Text>}
-          {item.nextDue && <Text style={styles.details}>Next Due: {item.nextDue}</Text>}
-        </View>
-        <View style={styles.iconActions}>
-          <TouchableOpacity onPress={() => markAsTaken(item.id)}>
-            <MaterialCommunityIcons
-              name={item.lastTaken ? 'check-circle-outline' : 'close-circle-outline'}
-              size={24}
-              color={item.lastTaken ? '#27ae60' : '#e74c3c'}
-            />
+  const renderMedication = ({ item }) => {
+    const nextDue = item.nextDoseDue ? new Date(item.nextDoseDue) : null;
+    const givenAt = item.givenAt ? new Date(item.givenAt) : null;
+    const isDue = nextDue && nextDue <= new Date();
+
+    return (
+      <View style={[styles.card, isDue && styles.cardDue]}>
+        <View style={styles.cardContent}>
+          <MaterialCommunityIcons name="pill" size={24} color="#0984e3" style={styles.icon} />
+          <View style={styles.textContainer}>
+            <Text style={styles.medName}>{item.name}</Text>
+            <Text style={styles.details}>Dosage: {item.dosage}</Text>
+            {givenAt && (
+              <Text style={styles.details}>
+                Given: {givenAt.toLocaleString()}
+              </Text>
+            )}
+            {nextDue && (
+              <Text style={[styles.details, isDue && styles.dueText]}>
+                Next due: {nextDue.toLocaleString()}{isDue ? ' ⚠️' : ''}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity onPress={() => deleteMedication(item.id)} style={styles.deleteBtn}>
+            <MaterialCommunityIcons name="trash-can-outline" size={22} color="#e74c3c" />
           </TouchableOpacity>
         </View>
       </View>
-    </View>
-  );
-
-  const frequencyOptions = ['Once daily', 'Twice daily', 'Every 8 hours', 'Every 6 hours', 'Custom'];
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Medication</Text>
-      <FlatList
-        data={medications}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMedication}
-        contentContainerStyle={styles.listContainer}
-      />
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0984e3" style={{ marginTop: 40 }} />
+      ) : medications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="pill" size={48} color="#b2bec3" />
+          <Text style={styles.emptyText}>No medications logged yet.</Text>
+          <Text style={styles.emptyHint}>Tap + to add a medication record.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={medications}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderMedication}
+          contentContainerStyle={styles.listContainer}
+        />
+      )}
+
       <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
         <MaterialCommunityIcons name="plus" size={30} color="#fff" />
       </TouchableOpacity>
@@ -120,21 +165,31 @@ export default function MedicationPage() {
       <Modal visible={modalVisible} animationType="slide">
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Add Medication</Text>
-          <TextInput style={styles.input} placeholder="Name" value={newName} onChangeText={setNewName} />
-          <TextInput style={styles.input} placeholder="Dosage" value={newDosage} onChangeText={setNewDosage} />
 
-          <Text style={styles.label}>Select Frequency:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Medication name"
+            value={newName}
+            onChangeText={setNewName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Dosage (e.g. 5mg)"
+            value={newDosage}
+            onChangeText={setNewDosage}
+          />
+
+          <Text style={styles.label}>Frequency:</Text>
           <View style={styles.buttonGroup}>
-            {frequencyOptions.map((option) => (
+            {FREQUENCY_OPTIONS.map((option) => (
               <TouchableOpacity
                 key={option}
-                style={[
-                  styles.freqButton,
-                  selectedFrequency === option && styles.freqButtonSelected,
-                ]}
+                style={[styles.freqButton, selectedFrequency === option && styles.freqButtonSelected]}
                 onPress={() => setSelectedFrequency(option)}
               >
-                <Text style={styles.freqText}>{option}</Text>
+                <Text style={[styles.freqText, selectedFrequency === option && styles.freqTextSelected]}>
+                  {option}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -142,25 +197,23 @@ export default function MedicationPage() {
           {selectedFrequency === 'Custom' && (
             <TextInput
               style={styles.input}
-              placeholder="Custom interval in hours (1-24)"
+              placeholder="Interval in hours"
               keyboardType="numeric"
               value={customHours}
               onChangeText={setCustomHours}
             />
           )}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Duration"
-            value={newDuration}
-            onChangeText={setNewDuration}
-          />
-
-          <TouchableOpacity style={styles.saveButton} onPress={addMedication}>
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Save</Text>
+          <TouchableOpacity
+            style={[styles.saveButton, saving && { opacity: 0.6 }]}
+            onPress={addMedication}
+            disabled={saving}
+          >
+            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Text style={{ marginTop: 20, color: '#0984e3' }}>Cancel</Text>
+
+          <TouchableOpacity onPress={() => setModalVisible(false)} style={{ marginTop: 16 }}>
+            <Text style={{ color: '#0984e3', textAlign: 'center', fontSize: 16 }}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -183,19 +236,22 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   card: {
     backgroundColor: '#dfe6e9',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    flexDirection: 'row',
+  },
+  cardDue: {
+    backgroundColor: '#ffeaa7',
+    borderWidth: 1,
+    borderColor: '#f39c12',
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   icon: {
     marginRight: 16,
@@ -213,13 +269,17 @@ const styles = StyleSheet.create({
     color: '#2d3436',
     marginTop: 2,
   },
-  iconActions: {
-    alignItems: 'center',
+  dueText: {
+    color: '#e17055',
+    fontWeight: '600',
+  },
+  deleteBtn: {
+    padding: 4,
   },
   addButton: {
     position: 'absolute',
-    bottom: 20,
-    right: 20,
+    bottom: 24,
+    right: 24,
     backgroundColor: '#0984e3',
     borderRadius: 30,
     width: 60,
@@ -228,58 +288,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 5,
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#636e72',
+    marginTop: 12,
+  },
+  emptyHint: {
+    fontSize: 13,
+    color: '#b2bec3',
+    marginTop: 4,
+  },
   modalContent: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
     backgroundColor: '#fff',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 24,
     color: '#0984e3',
     textAlign: 'center',
   },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
-    padding: 10,
-    marginBottom: 10,
+    padding: 12,
+    marginBottom: 12,
     borderRadius: 8,
+    fontSize: 15,
   },
   label: {
     fontWeight: 'bold',
-    marginBottom: 5,
-    marginTop: 10,
+    marginBottom: 8,
+    marginTop: 8,
     color: '#2d3436',
   },
   buttonGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
   freqButton: {
-    padding: 10,
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#0984e3',
-    marginBottom: 8,
-    width: '48%',
-    alignItems: 'center',
   },
   freqButtonSelected: {
     backgroundColor: '#0984e3',
   },
   freqText: {
-    color: '#2d3436',
+    color: '#0984e3',
+  },
+  freqTextSelected: {
+    color: '#fff',
   },
   saveButton: {
     backgroundColor: '#0984e3',
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

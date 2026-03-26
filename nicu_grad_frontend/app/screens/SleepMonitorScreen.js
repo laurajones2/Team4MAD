@@ -1,61 +1,40 @@
 // nicu_grad_frontend/app/screens/SleepMonitorScreen.js
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../../constants/API';
+import { DISPLAY_NAME_KEY } from '../settings';
 
 const SleepMonitorScreen = () => {
     const [hoursSlept, setHoursSlept] = useState('');
-    const [minutesSlept, setMinutesSlept] = useState('');    
+    const [minutesSlept, setMinutesSlept] = useState('');
     const [quality, setQuality] = useState('');
     const [entries, setEntries] = useState([]);
+    const [loggedBy, setLoggedByState] = useState('');
+    const [loadingEntries, setLoadingEntries] = useState(true);
     const navigation = useNavigation();
 
   useEffect(() => {
-    Alert.alert(
-      'Load Sleep Logs',
-      'Would you like to load saved sleep data from the database?',
-      [
-        {
-          text: 'Use Empty Logs',
-          style: 'cancel',
-          onPress: () => {
-            setEntries([]); // fallback to nothing
-          },
-        },
-        {
-          text: 'Load Saved',
-          onPress: async () => {
-            try {
-              const response = await fetch(`${BASE_URL}/sleep`);
-              if (!response.ok) throw new Error('Failed to fetch sleep logs');
-  
-              const sleepData = await response.json();
-              setEntries(sleepData);
-            } catch (error) {
-              console.error('Error fetching sleep logs:', error);
-              Alert.alert('Error', 'Failed to load saved sleep logs.');
-              setEntries([]); // graceful fallback
-            }
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+    AsyncStorage.getItem(DISPLAY_NAME_KEY).then(name => {
+      if (name) setLoggedByState(name);
+    });
+    fetchSleepLogs();
   }, []);
   
 
   const fetchSleepLogs = async () => {
+    setLoadingEntries(true);
     try {
       const response = await fetch(`${BASE_URL}/sleep`);
       if (!response.ok) throw new Error('Failed to fetch sleep logs');
-
       const sleepData = await response.json();
       setEntries(sleepData);
     } catch (error) {
       console.error('Error fetching sleep logs:', error);
-      Alert.alert('Error', 'Failed to load sleep logs');
+    } finally {
+      setLoadingEntries(false);
     }
   };
 
@@ -75,8 +54,9 @@ const SleepMonitorScreen = () => {
         },
         body: JSON.stringify({
           durationMinutes: totalMinutes,
-          sleepDate: new Date().toISOString(), // today's date
+          sleepDate: new Date().toISOString(),
           quality: quality.trim() || 'Unknown',
+          loggedBy: loggedBy || null,
         }),
       });
   
@@ -156,17 +136,29 @@ const SleepMonitorScreen = () => {
 
 
       <View style={{ marginTop: 32 }}>
-        {entries.map((entry, idx) => (
-          <View key={idx} style={styles.noteCard}>
-            <Text style={styles.noteDate}>
-              {new Date(entry.startTime).toLocaleString('en-US', {
+        {loadingEntries ? (
+          <ActivityIndicator size="small" color="#007AFF" />
+        ) : entries.length === 0 ? (
+          <Text style={styles.emptyText}>No sleep logs yet. Log your first sleep above.</Text>
+        ) : (
+          entries.map((entry, idx) => (
+            <View key={idx} style={styles.noteCard}>
+              <Text style={styles.noteDate}>
+                {new Date(entry.sleepDate).toLocaleString('en-US', {
                   dateStyle: 'short',
                   timeStyle: 'short',
-                })} ➔ {new Date(entry.endTime).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
-            </Text>
-            <Text style={styles.noteText}>Quality: {entry.quality || 'N/A'}</Text>
-          </View>
-        ))}
+                })}
+              </Text>
+              <Text style={styles.noteText}>
+                Duration: {Math.floor(entry.durationMinutes / 60)}h {entry.durationMinutes % 60}m
+              </Text>
+              <Text style={styles.noteText}>Quality: {entry.quality || 'N/A'}</Text>
+              {entry.loggedBy ? (
+                <Text style={styles.noteBy}>by {entry.loggedBy}</Text>
+              ) : null}
+            </View>
+          ))
+        )}
       </View>
 
     </ScrollView>
@@ -236,6 +228,18 @@ const styles = StyleSheet.create({
   noteText: {
     fontSize: 14,
     color: '#333',
+  },
+  noteBy: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#aaa',
+    fontSize: 14,
+    marginTop: 16,
   },
   todayDate:{
     fontSize: 18,

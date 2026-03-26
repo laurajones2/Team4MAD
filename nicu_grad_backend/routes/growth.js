@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 // POST a new growth entry
 router.post('/', async (req, res) => {
-  const { weightG, measuredAt, notes } = req.body;
+  const { weightG, measuredAt, notes, loggedBy } = req.body;
 
   if (!weightG || !measuredAt) {
     return res.status(400).json({ error: 'Weight and date are required' });
@@ -20,6 +20,7 @@ router.post('/', async (req, res) => {
         weightG,
         measuredAt: new Date(measuredAt),
         notes: notes || "",
+        loggedBy: loggedBy || null,
       },
     });
     res.status(201).json(savedGrowth);

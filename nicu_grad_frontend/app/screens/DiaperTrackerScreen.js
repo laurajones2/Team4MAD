@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   ScrollView, StyleSheet, Alert
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../../constants/API';
+import { DISPLAY_NAME_KEY } from '../settings';
 
 export default function DiaperTrackerScreen() {
   const router = useRouter();
+  const [loggedBy, setLoggedByState] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem(DISPLAY_NAME_KEY).then(name => {
+      if (name) setLoggedByState(name);
+    });
+  }, []);
+
   const [wetCount, setWetCount] = useState('');
   const [dirtyCount, setDirtyCount] = useState('');
   const [diaperWeight, setDiaperWeight] = useState('');
@@ -34,6 +44,7 @@ export default function DiaperTrackerScreen() {
       dirtyCount: parseInt(dirtyCount),
       diaperWeight: diaperWeight ? parseFloat(diaperWeight) : null,
       stoolNotes: stoolNotes.trim(),
+      loggedBy: loggedBy || null,
       measuredAt: changeTime.toISOString(),
     };
 

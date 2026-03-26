@@ -16,6 +16,7 @@ router.post('/', async (req, res) => {
     weightBeforeG,
     weightAfterG,
     intakeG,
+    loggedBy,
     measuredAt,
   } = req.body;
 
@@ -33,6 +34,7 @@ router.post('/', async (req, res) => {
         weightBeforeG,
         weightAfterG,
         intakeG,
+        loggedBy: loggedBy || null,
         measuredAt: new Date(measuredAt),
       },
     });
