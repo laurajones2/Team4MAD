@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../../constants/API';
+import { DISPLAY_NAME_KEY } from '../settings';
 
 export default function FeedingTrackerScreen() {
   const navigation = useNavigation();
-  
+  const [loggedBy, setLoggedByState] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem(DISPLAY_NAME_KEY).then(name => {
+      if (name) setLoggedByState(name);
+    });
+  }, []);
+
   const [feedingMethod, setFeedingMethod] = useState('breast');
   const [breastSide, setBreastSide] = useState('left');
   const [duration, setDuration] = useState('');
@@ -38,6 +47,7 @@ export default function FeedingTrackerScreen() {
             weightBeforeG: feedingMethod === 'breast' && preWeight ? parseFloat(preWeight) : null,
             weightAfterG: feedingMethod === 'breast' && postWeight ? parseFloat(postWeight) : null,
             intakeG: feedingMethod === 'breast' && intakeAmount ? parseFloat(intakeAmount) : null,
+            loggedBy: loggedBy || null,
             measuredAt,
           };
           

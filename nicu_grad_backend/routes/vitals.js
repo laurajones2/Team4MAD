@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 // POST a new vitals entry
 router.post('/', async (req, res) => {
-  const { temp, hr, br, spo2, note, measuredAt } = req.body;
+  const { temp, hr, br, spo2, note, loggedBy, measuredAt } = req.body;
 
   if (!temp || !hr || !br || !spo2 || !measuredAt) {
     return res.status(400).json({ error: 'All vitals and timestamp are required' });
@@ -19,6 +19,7 @@ router.post('/', async (req, res) => {
         br: parseInt(br),
         spo2: parseInt(spo2),
         note: note || '',
+        loggedBy: loggedBy || null,
         measuredAt: new Date(measuredAt),
       },
     });

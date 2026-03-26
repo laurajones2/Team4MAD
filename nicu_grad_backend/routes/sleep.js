@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 // POST a new sleep entry
 router.post('/', async (req, res) => {
-  const { sleepDate, durationMinutes, quality } = req.body;
+  const { sleepDate, durationMinutes, quality, loggedBy } = req.body;
 
   if (!sleepDate || durationMinutes == null) {
     return res.status(400).json({ error: 'Sleep date and duration are required' });
@@ -18,6 +18,7 @@ router.post('/', async (req, res) => {
         sleepDate: new Date(sleepDate),
         durationMinutes,
         quality: quality || 'Unknown',
+        loggedBy: loggedBy || null,
       },
     });
     res.status(201).json(savedSleep);

@@ -3,7 +3,7 @@ services:
     name: nicu-grad-api
     env: node
     rootDir: nicu_grad_backend
-    buildCommand: npm install && npx prisma generate
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
     startCommand: node index.js
     envVars:
       - key: DATABASE_URL

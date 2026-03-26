@@ -4,7 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 router.post('/', async (req, res) => {
-  const { wetCount, dirtyCount, stoolNotes, diaperWeight, measuredAt } = req.body;
+  const { wetCount, dirtyCount, stoolNotes, diaperWeight, loggedBy, measuredAt } = req.body;
 
   if (wetCount == null || dirtyCount == null || !measuredAt) {
     return res.status(400).json({ error: 'Wet, dirty, and date are required' });
@@ -17,6 +17,7 @@ router.post('/', async (req, res) => {
         dirtyCount,
         stoolNotes: stoolNotes || '',
         diaperWeight: diaperWeight ? parseFloat(diaperWeight) : null,
+        loggedBy: loggedBy || null,
         measuredAt: new Date(measuredAt),
       },
     });
